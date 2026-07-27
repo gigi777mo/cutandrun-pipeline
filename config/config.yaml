@@ -1,0 +1,61 @@
+# CUT&RUN pipeline configuration
+
+# Reference genomes
+genome: hg38
+bowtie2_index: "/path/to/bowtie2/hg38"
+chrom_sizes: "/path/to/hg38.chrom.sizes"
+blacklist: ""                        # optional ENCODE blacklist BED
+
+# Spike-in (E. coli residual DNA or exogenous)
+spikein:
+  enabled: false
+  index: "/path/to/bowtie2/ecoli"    # or yeast/fly if added experimentally
+  genome_name: ecoli
+
+# Sample sheet
+samples: "data/samples.csv"
+
+# Trimming
+trim:
+  tool: trim_galore                  # trim_galore | fastp
+  quality: 20
+  min_length: 20
+
+# Alignment (Bowtie2)
+align:
+  dovetail: true                     # REQUIRED for CUT&RUN
+  min_fragment: 10
+  max_fragment: 700
+  min_mapq: 20
+  remove_mito: true
+  mito_contig: "chrM"                # or MT depending on genome
+  mark_duplicates: true
+  remove_duplicates: false           # mark only by default (CUT&RUN often keeps dups)
+
+# Coverage tracks
+coverage:
+  normalize: spikein                 # spikein | cpm | none
+  bin_size: 10
+
+# Peak calling
+peaks:
+  primary: seacr                     # seacr | macs2
+  callers: "seacr,macs2"             # run both
+  seacr:
+    mode: stringent                  # stringent | relaxed
+    norm: norm                       # norm | non  (use norm with IgG)
+  macs2:
+    qvalue: 0.01
+    broad: false                     # true for some histone marks
+  use_control: true                  # use IgG from samplesheet when available
+  fragment_size_filter: null         # e.g. 120 to keep only ≤120 bp (TF focus)
+
+# QC thresholds (warnings)
+qc:
+  min_reads: 5000000
+  min_fri_p: 0.01
+
+# Resources
+resources:
+  threads: 8
+  memory_gb: 32

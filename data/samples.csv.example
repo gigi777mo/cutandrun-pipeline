@@ -1,0 +1,5 @@
+sample,condition,replicate,control,antibody
+K27ac_rep1,WT,1,IgG_1,H3K27ac
+K27ac_rep2,WT,2,IgG_1,H3K27ac
+CTCF_rep1,WT,1,IgG_1,CTCF
+IgG_1,control,1,,IgG

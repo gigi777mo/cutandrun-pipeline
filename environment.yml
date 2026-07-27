@@ -1,0 +1,30 @@
+name: cutandrun
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.11
+  - pandas
+  - numpy
+  - pyyaml
+  - snakemake >=8.0
+  # QC & trimming
+  - fastqc
+  - multiqc
+  - trim-galore
+  - fastp
+  # Alignment & processing
+  - bowtie2 >=2.4
+  - samtools >=1.15
+  - picard
+  - bedtools
+  - ucsc-bedgraphtobigwig
+  # Peak calling
+  - macs2
+  # Note: SEACR is a script – install manually or via the pipeline helper
+  # QC & visualization
+  - deeptools
+  - preseq
+  - seaborn
+  - matplotlib

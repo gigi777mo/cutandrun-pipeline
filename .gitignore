@@ -1,0 +1,10 @@
+results/
+data/raw/
+*.fastq.gz
+*.bam
+*.bai
+*.bw
+*.bedgraph
+.snakemake/
+__pycache__/
+.DS_Store

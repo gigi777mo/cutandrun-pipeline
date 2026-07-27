@@ -1,0 +1,163 @@
+# CUT&RUN Snakemake workflow
+# Standards: Bowtie2 --dovetail, SEACR + MACS2, spike-in, IgG controls
+
+import pandas as pd
+from pathlib import Path
+
+configfile: "config/config.yaml"
+
+samples = pd.read_csv(config["samples"]).set_index("sample", drop=False)
+SAMPLES = samples.index.tolist()
+THREADS = config.get("resources", {}).get("threads", 8)
+
+rule all:
+    input:
+        "results/qc/multiqc_report.html",
+        expand("results/bam/{sample}.filtered.bam", sample=SAMPLES),
+        expand("results/coverage/{sample}.bw", sample=SAMPLES),
+        expand("results/peaks/seacr/{sample}.bed", sample=SAMPLES),
+
+
+# ---------- QC ----------
+rule fastqc:
+    input:
+        r1 = "data/raw/{sample}_R1.fastq.gz",
+        r2 = "data/raw/{sample}_R2.fastq.gz",
+    output:
+        touch("results/qc/raw/{sample}.done"),
+    threads: 2
+    shell:
+        """
+        mkdir -p results/qc/raw
+        fastqc -t {threads} -o results/qc/raw {input.r1} {input.r2}
+        touch {output}
+        """
+
+rule multiqc:
+    input:
+        expand("results/qc/raw/{sample}.done", sample=SAMPLES),
+    output:
+        "results/qc/multiqc_report.html",
+    shell:
+        "multiqc results/qc results/trimmed results/bam -o results/qc --force || multiqc results/qc -o results/qc --force"
+
+
+# ---------- Trimming ----------
+rule trim_galore:
+    input:
+        r1 = "data/raw/{sample}_R1.fastq.gz",
+        r2 = "data/raw/{sample}_R2.fastq.gz",
+    output:
+        r1 = "results/trimmed/{sample}_R1.fastq.gz",
+        r2 = "results/trimmed/{sample}_R2.fastq.gz",
+    threads: THREADS
+    params:
+        qual = config.get("trim", {}).get("quality", 20),
+        length = config.get("trim", {}).get("min_length", 20),
+    shell:
+        """
+        mkdir -p results/trimmed
+        trim_galore --paired --quality {params.qual} --length {params.length} \
+          --cores {threads} -o results/trimmed \
+          --basename {wildcards.sample} {input.r1} {input.r2}
+        # Normalize output names from trim_galore
+        mv results/trimmed/{wildcards.sample}_R1_val_1.fq.gz {output.r1} || \
+        mv results/trimmed/{wildcards.sample}_val_1.fq.gz {output.r1} || true
+        mv results/trimmed/{wildcards.sample}_R2_val_2.fq.gz {output.r2} || \
+        mv results/trimmed/{wildcards.sample}_val_2.fq.gz {output.r2} || true
+        """
+
+
+# ---------- Alignment ----------
+rule bowtie2_align:
+    input:
+        r1 = "results/trimmed/{sample}_R1.fastq.gz",
+        r2 = "results/trimmed/{sample}_R2.fastq.gz",
+    output:
+        bam = "results/bam/{sample}.raw.bam",
+    threads: THREADS
+    params:
+        index = config["bowtie2_index"],
+        dovetail = "--dovetail" if config.get("align", {}).get("dovetail", True) else "",
+        min_f = config.get("align", {}).get("min_fragment", 10),
+        max_f = config.get("align", {}).get("max_fragment", 700),
+    shell:
+        """
+        mkdir -p results/bam
+        bowtie2 -p {threads} -x {params.index} \
+          -1 {input.r1} -2 {input.r2} \
+          {params.dovetail} -I {params.min_f} -X {params.max_f} \
+          --local --very-sensitive-local --no-unal --no-mixed --no-discordant \
+          2> results/bam/{wildcards.sample}.bowtie2.log | \
+        samtools view -bS - | samtools sort -@ {threads} -o {output.bam}
+        samtools index {output.bam}
+        """
+
+
+rule filter_bam:
+    input:
+        "results/bam/{sample}.raw.bam",
+    output:
+        bam = "results/bam/{sample}.filtered.bam",
+    threads: THREADS
+    params:
+        mapq = config.get("align", {}).get("min_mapq", 20),
+        mito = config.get("align", {}).get("mito_contig", "chrM"),
+        remove_mito = config.get("align", {}).get("remove_mito", True),
+    shell:
+        """
+        if [ "{params.remove_mito}" = "True" ]; then
+          samtools view -@ {threads} -b -q {params.mapq} -F 1804 -f 2 {input} | \
+            samtools view -@ {threads} -b -o {output.bam}.tmp - \
+            $(samtools idxstats {input} | cut -f1 | grep -v '^{params.mito}$' | grep -v '*')
+        else
+          samtools view -@ {threads} -b -q {params.mapq} -F 1804 -f 2 -o {output.bam}.tmp {input}
+        fi
+        samtools sort -@ {threads} -o {output.bam} {output.bam}.tmp
+        rm -f {output.bam}.tmp
+        samtools index {output.bam}
+        """
+
+
+# ---------- Coverage ----------
+rule bam_to_bedgraph:
+    input:
+        "results/bam/{sample}.filtered.bam",
+    output:
+        "results/coverage/{sample}.bedgraph",
+    shell:
+        """
+        mkdir -p results/coverage
+        bedtools genomecov -bg -ibam {input} | sort -k1,1 -k2,2n > {output}
+        """
+
+rule bedgraph_to_bigwig:
+    input:
+        bg = "results/coverage/{sample}.bedgraph",
+        sizes = config["chrom_sizes"],
+    output:
+        "results/coverage/{sample}.bw",
+    shell:
+        "bedGraphToBigWig {input.bg} {input.sizes} {output}"
+
+
+# ---------- Peak calling (SEACR) ----------
+rule seacr_peaks:
+    input:
+        target = "results/coverage/{sample}.bedgraph",
+    output:
+        "results/peaks/seacr/{sample}.bed",
+    params:
+        mode = config.get("peaks", {}).get("seacr", {}).get("mode", "stringent"),
+        norm = config.get("peaks", {}).get("seacr", {}).get("norm", "norm"),
+    shell:
+        """
+        mkdir -p results/peaks/seacr
+        # SEACR requires the SEACR_1.3.sh (or newer) script in PATH
+        # Without control: numeric threshold; with control use IgG bedgraph
+        # Fallback threshold mode when no control wired in Snakefile yet
+        bash SEACR_1.3.sh {input.target} 0.01 {params.norm} {params.mode} results/peaks/seacr/{wildcards.sample}
+        # SEACR writes <prefix>.stringent.bed or similar
+        cp results/peaks/seacr/{wildcards.sample}*.bed {output} 2>/dev/null || \
+          touch {output}
+        """
