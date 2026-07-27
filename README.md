@@ -8,6 +8,8 @@ Based on standards from:
 - **4DN CUT&RUN processing pipeline**
 - **CUT&RUNTools** principles (dovetail alignment, short-fragment handling)
 
+Full citations: **[docs/CITATIONS.md](docs/CITATIONS.md)**
+
 ---
 
 ## Pipeline Overview
@@ -159,22 +161,14 @@ Always inspect fragment-size distributions and FRiP before interpreting peaks.
 
 ---
 
-## Requirements
-
-- Paired-end FASTQ
-- Bowtie2 index for target genome
-- Optional: spike-in index, blacklist BED, IgG controls
-
----
-
 ## Citation
 
-If you use this pipeline, please cite the underlying methods:
+If you use this pipeline, please cite the underlying methods in **[docs/CITATIONS.md](docs/CITATIONS.md)**. Key papers:
 
-- **SEACR** — Meers MP, Tenenbaum D, Henikoff S. *Peak calling by sparse enrichment analysis for CUT&RUN chromatin profiling.* Epigenetics & Chromatin. 2019.
-- **CUT&RUN method** — Skene PJ, Henikoff S. *An efficient targeted nuclease strategy for high-resolution mapping of DNA binding sites.* eLife. 2017.
-- **nf-core/cutandrun** — Hodgetts et al., JOSS 2026 (community reference workflow).
-- Bowtie2, MACS2, deepTools, Trim Galore!, Picard, SAMtools, bedtools — see respective papers.
+- **SEACR** — Meers MP, Tenenbaum D, Henikoff S. Epigenetics & Chromatin. 2019.
+- **CUT&RUN method** — Skene PJ, Henikoff S. eLife. 2017.
+- **nf-core/cutandrun** — Hodgetts et al., JOSS 2026.
+- Bowtie2, MACS2, deepTools, Trim Galore!, Picard, SAMtools, bedtools — see CITATIONS.md.
 
 ---
 
