@@ -1,0 +1,7 @@
+# Python layer only — Bowtie2, SEACR, MACS2, samtools typically via conda/bioconda
+numpy>=1.24
+pandas>=2.0
+matplotlib>=3.7
+seaborn>=0.12
+pyyaml>=6.0
+multiqc>=1.14
